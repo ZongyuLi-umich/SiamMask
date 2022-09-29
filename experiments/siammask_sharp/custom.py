@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils.load_helper import load_pretrain
 from resnet import resnet50
+from densenet import densenet121
 
 
 class ResDownS(nn.Module):
@@ -28,17 +29,18 @@ class ResDownS(nn.Module):
 class ResDown(MultiStageFeature):
     def __init__(self, pretrain=False):
         super(ResDown, self).__init__()
-        self.features = resnet50(layer3=True, layer4=False)
-        if pretrain:
-            load_pretrain(self.features, 'resnet.model')
+        # self.features = resnet50(layer3=True, layer4=False)
+        self.features = densenet121(pretrained=pretrain)
+        # if pretrain:
+        #     load_pretrain(self.features, 'resnet.model')
 
         self.downsample = ResDownS(1024, 256)
 
-        self.layers = [self.downsample, self.features.layer2, self.features.layer3]
-        self.train_nums = [1, 3]
-        self.change_point = [0, 0.5]
-
-        self.unfix(0.0)
+        # self.layers = [self.downsample, self.features.layer2, self.features.layer3]
+        # self.train_nums = [1, 3]
+        # self.change_point = [0, 0.5]
+        #
+        # self.unfix(0.0)
 
     def param_groups(self, start_lr, feature_mult=1):
         lr = start_lr * feature_mult
@@ -57,12 +59,13 @@ class ResDown(MultiStageFeature):
 
     def forward(self, x):
         output = self.features(x)
-        p3 = self.downsample(output[-1])
+        # print(output[-1].shape)
+        p3 = self.downsample(output)
         return p3
 
     def forward_all(self, x):
         output = self.features(x)
-        p3 = self.downsample(output[-1])
+        p3 = self.downsample(output)
         return output, p3
 
 
@@ -189,3 +192,21 @@ class Custom(SiamMask):
         pred_mask = self.refine_model(self.feature, self.corr_feature, pos=pos, test=True)
         return pred_mask
 
+if __name__ == '__main__':
+    template = torch.rand(1,3,127,127)
+    search = torch.rand(1,3,255,255)
+    anchors = {"stride": 8, "ratios": [0.33, 0.5, 1, 2, 3], "scales": [8], "round_dight": 0}
+    model = Custom(anchors=anchors)
+    model.template(template)
+    print(model.zf.shape)
+    rpn_pred_cls, rpn_pred_loc, pred_mask = model.track_mask(search)
+    print('rpn_pred_cls:', rpn_pred_cls.shape)
+    print('rpn_pred_loc:', rpn_pred_loc.shape)
+    print('pred_mask:', pred_mask.shape)
+    # cfg = load_config(args)
+    # rpn_pred_cls, rpn_pred_loc, pred_mask = s.track_mask(x)
+    # print('rpn_pred_cls shape: ', rpn_pred_cls.shape)
+    # print('rpn_pred_loc shape: ', rpn_pred_loc.shape)
+    # print('pred_mask shape: ', pred_mask.shape)
+    # print(s)
+    # print(backbone.forward(x))
